@@ -213,7 +213,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
         dice_weight = cfg.MODEL.MASK_FORMER.DICE_WEIGHT # 5.0
         mask_weight = cfg.MODEL.MASK_FORMER.MASK_WEIGHT # 5.0
 
-        matcher = hungarian_matcher_PSALM(
+        matcher = hungarian_matcher_InstructSeg(
             cost_class=class_weight,
             cost_mask=mask_weight,
             cost_dice=dice_weight,
