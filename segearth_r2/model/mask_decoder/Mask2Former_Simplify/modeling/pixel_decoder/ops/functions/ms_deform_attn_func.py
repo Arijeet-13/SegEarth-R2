@@ -18,18 +18,15 @@ import torch.nn.functional as F
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 
-# try:
-#     import MultiScaleDeformableAttention as MSDA
-# except ModuleNotFoundError as e:
-#     info_string = (
-#         "\n\nPlease compile MultiScaleDeformableAttention CUDA op with the following commands:\n"
-#         "\t`cd mask2former/modeling/pixel_decoder/ops`\n"
-#         "\t`sh make.sh`\n"
-#     )
-#     raise ModuleNotFoundError(info_string)
-
-MSDA = None
-
+try:
+    import MultiScaleDeformableAttention as MSDA
+except ModuleNotFoundError as e:
+    info_string = (
+        "\n\nPlease compile MultiScaleDeformableAttention CUDA op with the following commands:\n"
+        "\t`cd mask2former/modeling/pixel_decoder/ops`\n"
+        "\t`sh make.sh`\n"
+    )
+    raise ModuleNotFoundError(info_string)
 
 class MSDeformAttnFunction(Function):
     @staticmethod
@@ -70,7 +67,7 @@ def ms_deform_attn_core_pytorch(value, value_spatial_shapes, sampling_locations,
         sampling_grid_l_ = sampling_grid_l_.transpose(1, 2).flatten(0, 1) # eg. [bs * 8, 1045, 3, 3]
         # N_*M_, D_, Lq_, P_
         data_type = value_l_.dtype
-        sampling_value_l_ = F.grid_sample(value_l_, sampling_grid_l_, mode='bilinear', padding_mode='zeros', align_corners=False) # eg. [bs * 8, 32, 1045, 4]
+        sampling_value_l_ = F.grid_sample(value_l_.float(), sampling_grid_l_.float(), mode='bilinear', padding_mode='zeros', align_corners=False) # eg. [bs * 8, 32, 1045, 4]
         sampling_value_list.append(sampling_value_l_.to(data_type))
 
     # (N_, Lq_, M_, L_, P_) -> (N_, M_, Lq_, L_, P_) -> (N_, M_, 1, Lq_, L_*P_)

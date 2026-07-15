@@ -109,23 +109,23 @@ class MSDeformAttn(nn.Module):
         offset_normalizer = torch.stack([input_spatial_shapes[..., 1], input_spatial_shapes[..., 0]], -1)
         sampling_locations = reference_points[:, :, None, :, None, :] + sampling_offsets / offset_normalizer[None, None, None, :, None, :]    
 
-        # try:
-        #     data_type = value.dtype
-        #     # Pass contiguous tensors to CUDA:
-        #     output = MSDeformAttnFunction.apply(
-        #         value.float().contiguous(), 
-        #         input_spatial_shapes, 
-        #         input_level_start_index, 
-        #         sampling_locations.contiguous(), 
-        #         attention_weights.float().contiguous(), 
-        #         self.im2col_step
-        #     )
-        #     output = output.to(data_type)
-        #     # output = MSDeformAttnFunction.apply(value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
-        # except:
-        #     # CPU, for debug or test only
-        #     output = ms_deform_attn_core_pytorch(value, input_spatial_shapes, sampling_locations, attention_weights)
-        output = ms_deform_attn_core_pytorch(value, input_spatial_shapes, sampling_locations, attention_weights) #To remove the segmenatation faults
+        try:
+            data_type = value.dtype
+            # Pass contiguous tensors to CUDA:
+            output = MSDeformAttnFunction.apply(
+                value.float().contiguous(), 
+                input_spatial_shapes, 
+                input_level_start_index, 
+                sampling_locations.contiguous(), 
+                attention_weights.float().contiguous(), 
+                self.im2col_step
+            )
+            output = output.to(data_type)
+            # output = MSDeformAttnFunction.apply(value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
+        except:
+            # CPU, for debug or test only
+            output = ms_deform_attn_core_pytorch(value, input_spatial_shapes, sampling_locations, attention_weights)
+        # output = ms_deform_attn_core_pytorch(value, input_spatial_shapes, sampling_locations, attention_weights) #To remove the segmenatation faults
 
         # For FLOPs calculation only
         # output = ms_deform_attn_core_pytorch(value, input_spatial_shapes, sampling_locations, attention_weights)
