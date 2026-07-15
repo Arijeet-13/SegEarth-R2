@@ -221,8 +221,8 @@ def train():
                 )
     
     if not model.is_train_mask_decode:
-        mask2former_ckpt = model_args.vision_tower if model_args.load_mask2former else None
-        model.initial_mask_module(mask2former_ckpt)
+        mask2former_ckpt = model_args.vision_tower_mask if model_args.load_mask2former else None
+        model.initial_mask_module(mask2former_ckpt, model_args)
 
     model.config.use_cache = False
 
