@@ -111,7 +111,15 @@ class MSDeformAttn(nn.Module):
 
         try:
             data_type = value.dtype
-            output = MSDeformAttnFunction.apply(value.float(), input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights.float(), self.im2col_step)
+            # Pass contiguous tensors to CUDA:
+            output = MSDeformAttnFunction.apply(
+                value.float().contiguous(), 
+                input_spatial_shapes, 
+                input_level_start_index, 
+                sampling_locations.contiguous(), 
+                attention_weights.float().contiguous(), 
+                self.im2col_step
+            )
             output = output.to(data_type)
             # output = MSDeformAttnFunction.apply(value, input_spatial_shapes, input_level_start_index, sampling_locations, attention_weights, self.im2col_step)
         except:
