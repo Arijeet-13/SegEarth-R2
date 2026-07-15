@@ -21,7 +21,8 @@
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
 
-#include <THC/THCAtomics.cuh>
+// #include <THC/THCAtomics.cuh>
+#include <ATen/cuda/Atomic.cuh> /*Dealt with the include issue causing segmentation faults*/
 
 #define CUDA_KERNEL_LOOP(i, n)                          \
   for (int i = blockIdx.x * blockDim.x + threadIdx.x;   \
