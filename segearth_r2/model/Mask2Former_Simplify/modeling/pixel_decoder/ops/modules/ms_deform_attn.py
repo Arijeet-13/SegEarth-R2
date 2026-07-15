@@ -28,7 +28,7 @@ from ..functions.ms_deform_attn_func import ms_deform_attn_core_pytorch
 def _is_power_of_2(n):
     if (not isinstance(n, int)) or (n < 0):
         raise ValueError("invalid input for _is_power_of_2: {} (type: {})".format(n, type(n)))
-    return (n & (n-1) == 0) and n != 0  # 判断是否为2的幂
+    return (n & (n-1) == 0) and n != 0
 
 
 class MSDeformAttn(nn.Module):
@@ -43,36 +43,36 @@ class MSDeformAttn(nn.Module):
         super().__init__()
         if d_model % n_heads != 0:
             raise ValueError('d_model must be divisible by n_heads, but got {} and {}'.format(d_model, n_heads))
-        _d_per_head = d_model // n_heads # 256 / 8 = 32
+        _d_per_head = d_model // n_heads
         # you'd better set _d_per_head to a power of 2 which is more efficient in our CUDA implementation
         if not _is_power_of_2(_d_per_head):
             warnings.warn("You'd better set d_model in MSDeformAttn to make the dimension of each attention head a power of 2 "
                           "which is more efficient in our CUDA implementation.")
 
-        self.im2col_step = 128 # 这是啥?
+        self.im2col_step = 128
 
         self.d_model = d_model
         self.n_levels = n_levels
         self.n_heads = n_heads
         self.n_points = n_points
 
-        self.sampling_offsets = nn.Linear(d_model, n_heads * n_levels * n_points * 2) # (256, 8 * 3 * 4 * 2 (192))
-        self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points) # (256, 8 * 3 * 4 (96))
-        self.value_proj = nn.Linear(d_model, d_model) # (256, 256)
-        self.output_proj = nn.Linear(d_model, d_model) # (256, 256)
+        self.sampling_offsets = nn.Linear(d_model, n_heads * n_levels * n_points * 2)
+        self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
+        self.value_proj = nn.Linear(d_model, d_model)
+        self.output_proj = nn.Linear(d_model, d_model)
 
         self._reset_parameters()
 
     def _reset_parameters(self):
-        constant_(self.sampling_offsets.weight.data, 0.) # 将权重全都初始化为0.0
-        thetas = torch.arange(self.n_heads, dtype=torch.float32) * (2.0 * math.pi / self.n_heads) # [2 * pi * 0 / 8, 2 * pi * 1 / 8, 2 * pi * 2 / 8, 2 * pi * 3 / 8, 2 * pi * 4 / 8 ...]
-        grid_init = torch.stack([thetas.cos(), thetas.sin()], -1) # [8, ] -> [8, 2]
-        grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1, self.n_levels, self.n_points, 1) # [8,2] -> [8, 3, 4, 2]
+        constant_(self.sampling_offsets.weight.data, 0.)
+        thetas = torch.arange(self.n_heads, dtype=torch.float32) * (2.0 * math.pi / self.n_heads)
+        grid_init = torch.stack([thetas.cos(), thetas.sin()], -1)
+        grid_init = (grid_init / grid_init.abs().max(-1, keepdim=True)[0]).view(self.n_heads, 1, 1, 2).repeat(1, self.n_levels, self.n_points, 1)
         for i in range(self.n_points):
             grid_init[:, :, i, :] *= i + 1
         with torch.no_grad():
-            self.sampling_offsets.bias = nn.Parameter(grid_init.view(-1)) # view(-1)是什么意思: [8, 3, 4, 2] -> [8 * 3 * 4 * 2,]
-        constant_(self.attention_weights.weight.data, 0.) # 下面全是初始化权重
+            self.sampling_offsets.bias = nn.Parameter(grid_init.view(-1))
+        constant_(self.attention_weights.weight.data, 0.)
         constant_(self.attention_weights.bias.data, 0.)
         xavier_uniform_(self.value_proj.weight.data)
         constant_(self.value_proj.bias.data, 0.)

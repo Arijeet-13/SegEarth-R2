@@ -33,7 +33,7 @@ class MSDeformAttnTransformerEncoderLayer(nn.Module):
 
         # self attention
         self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
-        self.dropout1 = nn.Dropout(dropout) # dropout is 0.0
+        self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
         # ffn
@@ -111,9 +111,9 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
                                                             num_feature_levels, nhead, enc_n_points)
         self.encoder = MSDeformAttnTransformerEncoder(encoder_layer, num_encoder_layers)
 
-        self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model)) # (3, 256)
+        self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
 
-        self._reset_parameters() # 初始化参数
+        self._reset_parameters()
 
     def _reset_parameters(self):
         for p in self.parameters():
@@ -163,7 +163,7 @@ class MSDeformAttnTransformerEncoderOnly(nn.Module):
 
         return memory, spatial_shapes, level_start_index
 
-class MSDeformAttnPixelDecoder(nn.Module): # MSDeformAttnPixelDecoder
+class MSDeformAttnPixelDecoder(nn.Module):
     def __init__(
         self,
         input_shape,
@@ -179,28 +179,28 @@ class MSDeformAttnPixelDecoder(nn.Module): # MSDeformAttnPixelDecoder
         common_stride=4,
     ):
         super().__init__()
-        
-        transformer_input_shape = {k: v for k, v in input_shape.items() if k in transformer_in_features} # transformer_input_shape: {"res3": {"channel":256, "stride":8}, {"res4": ... }, {"res5": ...}}
+        # backbone中["res3", "res4", "res5"]特征层的(channel, stride), eg. [(32,4), (64, 8),(128, 16),(256, 32)]
+        transformer_input_shape = {k: v for k, v in input_shape.items() if k in transformer_in_features} 
         
         # this is the input shape of pixel decoder        
-        self.in_features = [k for k, v in input_shape.items()]  # starting from "res2" to "res5" ["res2", "res3", "res4", "res5"]
-        self.feature_channels = [v.channel for k, v in input_shape.items()] # [128, 256, 512, 1024]
+        self.in_features = [k for k, v in input_shape.items()]  # starting from "res3" to "res5"        
+        self.feature_channels = [v.channel for k, v in input_shape.items()] # eg. [16, 64, 128, 256]
         
         # this is the input shape of transformer encoder (could use less features than pixel decoder        
-        self.transformer_in_features = [k for k, v in transformer_input_shape.items()]  # starting from "res3" to "res5"  ["res3", "res4", "res5"]
-        transformer_in_channels = [v.channel for k, v in transformer_input_shape.items()] # [256, 512, 1024]
-        self.transformer_feature_strides = [v.stride for k, v in transformer_input_shape.items()]  # [8, 16, 32]
+        self.transformer_in_features = [k for k, v in transformer_input_shape.items()]  # starting from "res3" to "res5"
+        transformer_in_channels = [v.channel for k, v in transformer_input_shape.items()] # eg. [64, 128, 256]
+        self.transformer_feature_strides = [v.stride for k, v in transformer_input_shape.items()]  # to decide extra FPN layers
 
-        self.transformer_num_feature_levels = len(self.transformer_in_features) # 3
+        self.transformer_num_feature_levels = len(self.transformer_in_features)
         if self.transformer_num_feature_levels > 1:
             input_proj_list = []
             # from low resolution to high resolution (res5 -> res3)
             for in_channels in transformer_in_channels[::-1]:
                 input_proj_list.append(nn.Sequential(
-                    nn.Conv2d(in_channels, conv_dim, kernel_size=1), # [batch_size, channels, H, W] -> [batch_size, conv_dim, H, W]
-                    nn.GroupNorm(32, conv_dim), # [batch_size, conv_dim, H, W] -> [batch_size, conv_dim, H, W]
-                )) # 
-            self.input_proj = nn.ModuleList(input_proj_list) # 包装起来
+                    nn.Conv2d(in_channels, conv_dim, kernel_size=1),
+                    nn.GroupNorm(32, conv_dim),
+                ))
+            self.input_proj = nn.ModuleList(input_proj_list)
         else:
             self.input_proj = nn.ModuleList([
                 nn.Sequential(
@@ -208,22 +208,22 @@ class MSDeformAttnPixelDecoder(nn.Module): # MSDeformAttnPixelDecoder
                     nn.GroupNorm(32, conv_dim),
                 )])
 
-        for proj in self.input_proj:  # 权重初始化,运用xavier_uniform_进行初始化
+        for proj in self.input_proj:
             nn.init.xavier_uniform_(proj[0].weight, gain=1)
             nn.init.constant_(proj[0].bias, 0)
 
         self.transformer = MSDeformAttnTransformerEncoderOnly(
-            d_model=conv_dim, # 256
-            dropout=transformer_dropout, # 0.0
-            nhead=transformer_nheads, # 8
-            dim_feedforward=transformer_dim_feedforward, # 1024
-            num_encoder_layers=transformer_enc_layers, # 6
-            num_feature_levels=self.transformer_num_feature_levels, # 3
+            d_model=conv_dim,
+            dropout=transformer_dropout,
+            nhead=transformer_nheads,
+            dim_feedforward=transformer_dim_feedforward,
+            num_encoder_layers=transformer_enc_layers,
+            num_feature_levels=self.transformer_num_feature_levels,
         )
-        N_steps = conv_dim // 2 # 128
+        N_steps = conv_dim // 2
         self.pe_layer = PositionEmbeddingSine(N_steps, normalize=True)
 
-        self.mask_dim = mask_dim # 256
+        self.mask_dim = mask_dim
         # use 1x1 conv instead
         self.mask_features = nn.Conv2d(
             conv_dim,
@@ -232,29 +232,29 @@ class MSDeformAttnPixelDecoder(nn.Module): # MSDeformAttnPixelDecoder
             stride=1,
             padding=0,
         )
-        weight_init.c2_xavier_fill(self.mask_features) # 初始化mask_features
+        weight_init.c2_xavier_fill(self.mask_features)
         
         self.maskformer_num_feature_levels = 3  # always use 3 scales
-        self.common_stride = common_stride # common stride = 4
+        self.common_stride = common_stride
 
         # extra fpn levels
-        stride = min(self.transformer_feature_strides) # 8 transformer_feature_strides: 8, 16, 32
-        self.num_fpn_levels = int(np.log2(stride) - np.log2(self.common_stride)) # 1
+        stride = min(self.transformer_feature_strides)
+        self.num_fpn_levels = int(np.log2(stride) - np.log2(self.common_stride))
 
         lateral_convs = []
         output_convs = []
 
-        for idx, in_channels in enumerate(self.feature_channels[:self.num_fpn_levels]): # res2 -> fpn  idx = 0, in_channels =128
+        for idx, in_channels in enumerate(self.feature_channels[:self.num_fpn_levels]): # res2 -> fpn
             lateral_conv = nn.Sequential(nn.Conv2d(in_channels, conv_dim, kernel_size=1),
                                          nn.GroupNorm(32, conv_dim),
-                                         nn.ReLU(inplace=True)) # channels: 128 -> 256
+                                         nn.ReLU(inplace=True))
 
             output_conv = nn.Sequential(nn.Conv2d(conv_dim, conv_dim, kernel_size=3,  stride=1,  padding=1),
                                         nn.GroupNorm(32, conv_dim),
-                                        nn.ReLU(inplace=True)) # H -> H , W -> W 
+                                        nn.ReLU(inplace=True))
             
-            weight_init.c2_xavier_fill(lateral_conv[0]) # 初始化卷积层
-            weight_init.c2_xavier_fill(output_conv[0]) # 初始化卷积层
+            weight_init.c2_xavier_fill(lateral_conv[0])
+            weight_init.c2_xavier_fill(output_conv[0])
             self.add_module("adapter_{}".format(idx + 1), lateral_conv)
             self.add_module("layer_{}".format(idx + 1), output_conv)
 
@@ -265,43 +265,43 @@ class MSDeformAttnPixelDecoder(nn.Module): # MSDeformAttnPixelDecoder
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
 
-    def forward_features(self, features): # features: {"res2": [batch_size, 128, H / 4 (128), W / 4 (128)], "res3": [batch_size, 256, H / 8 (64), W / 8 (64)], "res4": [batch_size, 512, H / 16 (32), W / 16 (32)], "res5": [batch_size, 1024, H / 32 (16), W / 32 (16)]}
+    def forward_features(self, features):
         srcs = []
         pos = []
         # Reverse feature maps into top-down order (from low to high resolution), 'res5' -> 'res3'
-        for idx, f in enumerate(self.transformer_in_features[::-1]): # self.transformer_in_features: ["res3", "res4", "res5"]
+        for idx, f in enumerate(self.transformer_in_features[::-1]):
             # x = features[f].float()  # deformable detr does not support half precision
-            x = features[f] 
+            x = features[f]
             srcs.append(self.input_proj[idx](x))
             pos.append(self.pe_layer(x).to(x.dtype))
-        # srcs: [[batch_size, 256, 32, 32], [batch_size, 256, 64, 64], [batch_size, 256, 128, 128]] pos: [[batch_size, 256, 32, 32], [batch_size, 256, 64, 64], [batch_size, 256, 128, 128]] pos和scrs的形状相同
-        y, spatial_shapes, level_start_index = self.transformer(srcs, pos) # 后三层
+
+        y, spatial_shapes, level_start_index = self.transformer(srcs, pos)
         bs = y.shape[0]
-        # y: [batch_size, 128 * 128 + 64 * 64 + 32 * 32]    spatial_shapes-value: [[32, 32], [64, 64], [128, 128]]    level_start_index-value: [0, 1024, 5120]
-        split_size_or_sections = [None] * self.transformer_num_feature_levels # value: [None, None, None]
+
+        split_size_or_sections = [None] * self.transformer_num_feature_levels
         for i in range(self.transformer_num_feature_levels):
             if i < self.transformer_num_feature_levels - 1:
                 split_size_or_sections[i] = level_start_index[i + 1] - level_start_index[i]
             else:
-                split_size_or_sections[i] = y.shape[1] - level_start_index[i] # split_size_or_sections-value: [1024, 4096, 16384]
+                split_size_or_sections[i] = y.shape[1] - level_start_index[i]
         # y tuple ([bs, seq_len=h*w, dim])
-        y = torch.split(y, split_size_or_sections, dim=1) # y: [[batch_size, 1024, 256], [batch_size, 4096, 256], [batch_size, 16384, 256]]
-        # 这个地方拼接一下语义特征？
+        y = torch.split(y, split_size_or_sections, dim=1)
+
         out = []
         multi_scale_features = []
         num_cur_levels = 0
         for i, z in enumerate(y):
             out.append(z.transpose(1, 2).view(bs, -1, spatial_shapes[i][0], spatial_shapes[i][1]))
-        # out: [[batch_size, 256, 32, 32], [batch_size, 256, 64, 64], [batch_size, 256, 128, 128]]
+
         # out list [[bs, dim, h, w], ..]
 
         # append `out` with extra FPN levels
         # Reverse feature maps into top-down order (from low to high resolution)
         for idx, f in enumerate(self.in_features[:self.num_fpn_levels][::-1]):
-            x = features[f] # [batch_size, 128, H / 4 (256), W / 4 (256)]
+            x = features[f]
             lateral_conv = self.lateral_convs[idx]
             output_conv = self.output_convs[idx]
-            cur_fpn = lateral_conv(x) # [2, 256, 256, 256]
+            cur_fpn = lateral_conv(x)
             # Following FPN implementation, we use nearest upsampling here
             y = cur_fpn + F.interpolate(out[-1].float(), size=cur_fpn.shape[-2:], mode="bilinear", align_corners=False).to(x.dtype)
             y = output_conv(y)
@@ -311,5 +311,5 @@ class MSDeformAttnPixelDecoder(nn.Module): # MSDeformAttnPixelDecoder
             if num_cur_levels < self.maskformer_num_feature_levels:
                 multi_scale_features.append(o)
                 num_cur_levels += 1
-        # multi_scale_features: [[batch_size, 256, 32, 32], [batch_size, 256, 64, 64], [batch_size, 256, 128, 128]]
+
         return self.mask_features(out[-1]), out[0], multi_scale_features
