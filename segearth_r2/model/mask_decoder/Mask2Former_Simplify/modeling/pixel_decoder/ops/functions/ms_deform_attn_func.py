@@ -18,15 +18,17 @@ import torch.nn.functional as F
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 
-try:
-    import MultiScaleDeformableAttention as MSDA
-except ModuleNotFoundError as e:
-    info_string = (
-        "\n\nPlease compile MultiScaleDeformableAttention CUDA op with the following commands:\n"
-        "\t`cd mask2former/modeling/pixel_decoder/ops`\n"
-        "\t`sh make.sh`\n"
-    )
-    raise ModuleNotFoundError(info_string)
+# try:
+#     import MultiScaleDeformableAttention as MSDA
+# except ModuleNotFoundError as e:
+#     info_string = (
+#         "\n\nPlease compile MultiScaleDeformableAttention CUDA op with the following commands:\n"
+#         "\t`cd mask2former/modeling/pixel_decoder/ops`\n"
+#         "\t`sh make.sh`\n"
+#     )
+#     raise ModuleNotFoundError(info_string)
+
+MSDA = None
 
 
 class MSDeformAttnFunction(Function):
