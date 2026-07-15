@@ -279,13 +279,6 @@ def train():
         if not model_args.train_swin_backbone:
             model.model.vision_tower_mask.requires_grad_(False)  
 
-        model.config.tune_mm_mlp_adapter = training_args.tune_mm_mlp_adapter = model_args.tune_mm_mlp_adapter 
-        if model_args.tune_mm_mlp_adapter: 
-            model.requires_grad_(False)
-            for p in model.get_model().mm_projector.parameters():
-                p.requires_grad = True
-
-
         model.config.freeze_mm_mlp_adapter = training_args.freeze_mm_mlp_adapter 
         if training_args.freeze_mm_mlp_adapter:
             for p in model.get_model().mm_projector.parameters():
