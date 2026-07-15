@@ -211,7 +211,7 @@ def train():
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32)) # torch.float16
 
     mask_cfg = get_mask_config(config=model_args.mask_config)
-    bnb_model_from_pretrained_args = {}
+    bnb_model_from_pretrained_args = {"low_cpu_mem_usage": True}
     model = SegEarthR2.from_pretrained(
         model_args.model_name_or_path,
         mask_decoder_cfg=mask_cfg,
