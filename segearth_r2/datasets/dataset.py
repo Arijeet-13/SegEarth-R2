@@ -108,7 +108,7 @@ class RS_Base_Dataset(Dataset):
             raise ValueError(f'Unsupported tensor type: {return_tensors}')
         else:
             return input_ids
-    def preprocess_llama2(sources, tokenizer):
+    def preprocess_llama2(self, sources, tokenizer):
         conv = conversation_lib.default_conversation.copy()
         roles = {"human": conv.roles[0], "gpt": conv.roles[1]}
 
