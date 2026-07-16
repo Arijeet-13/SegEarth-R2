@@ -475,7 +475,8 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 1] == 1:
                 attention_mask = torch.ones((attention_mask.shape[0], past_key_values[-1][-1].shape[-2] + 1),
                                             dtype=attention_mask.dtype, device=attention_mask.device)
-            return input_ids, attention_mask, past_key_values, None, labels, None, None
+            safe_input_ids = input_ids.clamp(min=0)
+            return safe_input_ids, attention_mask, past_key_values, None, labels, None, None
 
         image_features = self.encode_images(images)
 
