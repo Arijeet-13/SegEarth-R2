@@ -598,6 +598,19 @@ class SegEarthR2(MiphaPhiForCausalLM):
                     dtype=attention_mask.dtype, device=attention_mask.device)
                 attention_mask = torch.cat((new_attn_mask_pad_left, attention_mask), dim=1)
                 assert attention_mask.shape == new_input_embeds.shape[:2]
+
+            if new_input_embeds.shape[1] > 2048: #Removed the extra paddings causing issue.
+                new_input_embeds = new_input_embeds[:, :2048, :]
+                if attention_mask is not None:
+                    attention_mask = attention_mask[:, :2048]
+                if new_labels is not None:
+                    new_labels = new_labels[:, :2048]
+                if new_SEG_token_embedding_indices is not None:
+                    new_SEG_token_embedding_indices = new_SEG_token_embedding_indices[:, :2048]
+                if new_image_features_indices is not None:
+                    new_image_features_indices = new_image_features_indices[:, :2048]
+
+        return None, attention_mask, past_key_values, new_input_embeds, new_labels, new_SEG_token_embedding_indices, new_image_features_indices
    
         return None, attention_mask, past_key_values, new_input_embeds, new_labels, new_SEG_token_embedding_indices, new_image_features_indices
         
