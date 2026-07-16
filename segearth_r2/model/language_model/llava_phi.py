@@ -845,38 +845,31 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 mask_loss = loss_mask + loss_dice
 
             loss_attention = None
-            if seg_info is not None:
-                masks = [_seg_info['mask'] for _seg_info in seg_info]
-                masks_resized = [
-                    F.interpolate(m.unsqueeze(0).float(), size=(800, 800), mode="nearest").squeeze(0)
-                    for m in masks
-                ]
-                masks = torch.stack(masks_resized, dim=0) # [4, 1, 800, 800]
-                masks_down = F.interpolate(masks, size=(27, 27), mode="bilinear", align_corners=False)
-                masks_down = masks_down.view(masks_down.size(0), -1)
-                masks_down[masks_down > 0] = 1
-                
-                loss_attention = torch.tensor(0.0, device=logits.device)           
-                for full_attention_map in attentions:
-                    batch_attentions_list = []
-                    for batch_idx in range(bs):
-                        attention_map = full_attention_map[batch_idx]
-                        SEG_mask = SEG_token_embedding_indices[batch_idx].bool()
-                        image_features_mask = image_features_indices[batch_idx].bool()
-                        attention = attention_map[SEG_mask][:, image_features_mask] # [1, 729]
-                        batch_attentions_list.append(attention)
-                    batch_attentions = torch.cat(batch_attentions_list, dim=0) # [4, 729]
-                    loss_attention += self.attention_loss(batch_attentions, masks_down)
-
-            if seg_info is not None and mask_loss is not None:
-                loss = llm_loss + mask_loss + 0.01 * loss_attention
-            else:
-                loss = llm_loss
+            masks = [_seg_info['mask'] for _seg_info in seg_info]
+            masks_resized = [
+                F.interpolate(m.unsqueeze(0).float(), size=(800, 800), mode="nearest").squeeze(0)
+                for m in masks
+            ]
+            masks = torch.stack(masks_resized, dim=0) # [4, 1, 800, 800]
+            masks_down = F.interpolate(masks, size=(27, 27), mode="bilinear", align_corners=False)
+            masks_down = masks_down.view(masks_down.size(0), -1)
+            masks_down[masks_down > 0] = 1
             
-            # Ensure detachable tensors for logging
-            _loss_mask = loss_mask.detach() if isinstance(loss_mask, torch.Tensor) else torch.tensor(0.0)
-            _loss_dice = loss_dice.detach() if isinstance(loss_dice, torch.Tensor) else torch.tensor(0.0)
-            _loss_attention = (0.01 * loss_attention).detach() if isinstance(loss_attention, torch.Tensor) else torch.tensor(0.0)
+            loss_attention = torch.tensor(0.0, device=mask_loss.device)           
+            for full_attention_map in attentions:
+                batch_attentions_list = []
+                for batch_idx in range(bs):
+                    attention_map = full_attention_map[batch_idx]
+                    SEG_mask = SEG_token_embedding_indices[batch_idx].bool()
+                    image_features_mask = image_features_indices[batch_idx].bool()
+                    attention = attention_map[SEG_mask][:, image_features_mask] # [1, 729]
+                    batch_attentions_list.append(attention)
+                batch_attentions = torch.cat(batch_attentions_list, dim=0) # [4, 729]
+                loss_attention += self.attention_loss(batch_attentions, masks_down)
+                                
+            loss = llm_loss + mask_loss + 0.01 * loss_attention
+            
+            # loss = llm_loss + mask_loss
 
             return CausalOutputWithMask(
                 loss=loss,
@@ -884,14 +877,29 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 past_key_values=outputs.past_key_values,
                 hidden_states=outputs.hidden_states,
                 attentions=outputs.attentions,
-                loss_mask=_loss_mask,
-                loss_dice=_loss_dice,
+                loss_mask=loss_mask.detach(),
+                loss_dice=loss_dice.detach(),
                 loss_llm=llm_loss.detach(),
-                loss_attention=_loss_attention,
+                loss_attention=0.01 * loss_attention.detach(),
             )
         
         else:
+            # No image_features (non-seg batch) — still compute LLM loss
+            loss = None
+            if labels is not None:
+                shift_logits = logits[..., :-1, :].contiguous()
+                shift_labels = labels[..., 1:].contiguous()
+                loss_fct = CrossEntropyLoss()
+                vocab_size = shift_logits.shape[-1]
+                invalid_mask = (shift_labels < 0) & (shift_labels != IGNORE_INDEX)
+                invalid_mask |= (shift_labels >= vocab_size)
+                shift_labels[invalid_mask] = IGNORE_INDEX
+                shift_logits = shift_logits.view(-1, vocab_size)
+                shift_labels = shift_labels.view(-1)
+                shift_labels = shift_labels.to(shift_logits.device)
+                loss = loss_fct(shift_logits, shift_labels)
             return CausalOutputWithMask(
+                loss=loss,
                 logits=logits,
                 past_key_values=outputs.past_key_values,
                 hidden_states=outputs.hidden_states,
