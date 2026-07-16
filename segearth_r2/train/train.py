@@ -16,6 +16,8 @@
 
 import os
 import sys
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1" #Fix to see the errors
+# ... rest of your imports (torch, transformers, etc.)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
