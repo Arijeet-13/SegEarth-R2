@@ -436,7 +436,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
                             f_dbg.write(f"[TRAPPED NEGATIVE] chunk_len: {chunk_len}, values: {slice_to_embed.tolist()}\n")
                     except Exception:
                         pass
-                cur_new_input_embeds.append(self.get_model().embed_tokens(input_id[:chunk_len]))
+                cur_new_input_embeds.append(self.get_model().embed_tokens(input_id[:chunk_len].clamp(min=0)))
                 image_features_indices.append(torch.zeros(chunk_len))
                 
                 if SEG_token_embedding_indices is not None:
@@ -704,6 +704,13 @@ class SegEarthR2(MiphaPhiForCausalLM):
                     torch.cuda.synchronize() #Checkpoint A
                     bs = input_ids.shape[0]
                  
+                input_ids, attention_mask, past_key_values, inputs_embeds, labels, SEG_token_embedding_indices, image_features_indices = self.prepare_inputs_labels_for_multimodal(
+                    input_ids, attention_mask, past_key_values, labels, images_clip,
+                    token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
+                torch.cuda.synchronize()
+            else:
+                # SEG_token_embedding_indices exists but has no seg tokens - still need to process multimodal inputs
+                image_features = None
                 input_ids, attention_mask, past_key_values, inputs_embeds, labels, SEG_token_embedding_indices, image_features_indices = self.prepare_inputs_labels_for_multimodal(
                     input_ids, attention_mask, past_key_values, labels, images_clip,
                     token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
