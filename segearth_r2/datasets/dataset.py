@@ -394,7 +394,9 @@ class EarthReasonDataset(RS_Base_Dataset):
         ref = QAs["questions"][0]
         answer_num = len(QAs["answer"])
         if answer_num == 0:
-            answer = "There is no target object in the image."
+            # Skip no-target samples to avoid distributed training deadlock
+            # (both GPUs must run the same modules each step)
+            return self.__getitem__((idx + 1) % len(self))
         else:
             answer = f"Sure, it is [SEG]. \n{QAs['answer'][0]}"
             
