@@ -364,6 +364,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
     def embed_refer_ids(self, refer_ids):
         if refer_ids is None:
             return None
+        refer_ids = refer_ids.to(device=self.device) #Changed due to error, moved to GPU.
         embedded_refer = self.get_model().embed_tokens(refer_ids)
         return embedded_refer
     def concat_image_seg_cls_embeds(self, input_id, img_feature, label, SEG_token_embedding_indices=None, refer_embedding=None):
