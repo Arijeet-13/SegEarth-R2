@@ -292,7 +292,8 @@ def train():
                 p.requires_grad = False
 
     tokenizer.add_tokens("[SEG]") 
-    model.resize_token_embeddings(len(tokenizer))
+    # model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(max(len(tokenizer), model.config.vocab_size)) #To prevent out-of-bounds CUDA assertions
     train_module_list = [
         "lm_head", "pixel_decoder", "predictor", "SEG_token_projector",
     ]
