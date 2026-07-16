@@ -700,16 +700,19 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 # for generative mode only the 1th stage need
                 if input_ids.shape[1] != 1:
                     image_features = self.get_vision_tower_feature(images)
+                    torch.cuda.synchronize() #Checkpoint A
                     bs = input_ids.shape[0]
-                
+                 
                 input_ids, attention_mask, past_key_values, inputs_embeds, labels, SEG_token_embedding_indices, image_features_indices = self.prepare_inputs_labels_for_multimodal(
                     input_ids, attention_mask, past_key_values, labels, images_clip,
                     token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
+                torch.cuda.synchronize()
         else:
             image_features = None
             input_ids, attention_mask, past_key_values, inputs_embeds, labels, SEG_token_embedding_indices, image_features_indices = self.prepare_inputs_labels_for_multimodal(
                 input_ids, attention_mask, past_key_values, labels, images_clip,
-                token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)         
+                token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
+            torch.cuda.synchronize() #Checkpoint B
 
         outputs = self.model(
             input_ids=input_ids,
@@ -721,6 +724,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+        torch.cuda.synchronize() #Checkpoint C
         
         hidden_states = outputs.last_hidden_state
         logits = self.lm_head(hidden_states)
