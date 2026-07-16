@@ -714,6 +714,20 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
             torch.cuda.synchronize() #Checkpoint B
 
+         # ==================== DEBUG TO FILE ====================
+        try:
+            with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
+                f_dbg.write(f"=== BEFORE self.model ===\n")
+                f_dbg.write(f"input_ids is None: {input_ids is None}\n")
+                if input_ids is not None:
+                    f_dbg.write(f"input_ids shape: {input_ids.shape}, min: {input_ids.min().item()}, max: {input_ids.max().item()}\n")
+                f_dbg.write(f"inputs_embeds is None: {inputs_embeds is None}\n")
+                if inputs_embeds is not None:
+                    f_dbg.write(f"inputs_embeds shape: {inputs_embeds.shape}\n")
+                f_dbg.write(f"===========================\n")
+        except Exception:
+            pass
+
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
