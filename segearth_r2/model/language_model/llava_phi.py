@@ -641,14 +641,19 @@ class SegEarthR2(MiphaPhiForCausalLM):
             mask_num=None,
             dataset_type=None,) -> Union[Tuple, CausalLMOutputWithPast]:
 
-        # ==================== DEBUG PRINTS ====================
-        if input_ids is not None:
-            print(f"[DEBUG] input_ids shape: {input_ids.shape}, min: {input_ids.min().item()}, max: {input_ids.max().item()}", flush=True)
-        if token_refer_id is not None:
-            for i, r in enumerate(token_refer_id):
-                if r is not None:
-                    print(f"[DEBUG] token_refer_id[{i}] shape: {r.shape}, min: {r.min().item()}, max: {r.max().item()}", flush=True)
-        print(f"[DEBUG] Model embed_tokens weight shape: {self.get_model().embed_tokens.weight.shape}", flush=True)
+        # ==================== DEBUG TO FILE ====================
+        try:
+            with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
+                if input_ids is not None:
+                    f_dbg.write(f"input_ids shape: {input_ids.shape}, min: {input_ids.min().item()}, max: {input_ids.max().item()}\n")
+                if token_refer_id is not None:
+                    for i, r in enumerate(token_refer_id):
+                        if r is not None:
+                            f_dbg.write(f"token_refer_id[{i}] shape: {r.shape}, min: {r.min().item()}, max: {r.max().item()}\n")
+                f_dbg.write(f"Model embed_tokens weight shape: {self.get_model().embed_tokens.weight.shape}\n")
+        except Exception as e:
+            pass
+        # ======================================================
         # ======================================================
     
     # def forward(
