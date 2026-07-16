@@ -348,10 +348,19 @@ class EarthReasonDataset(RS_Base_Dataset):
         path2_labels = os.path.join(base_data_path, f"rs_reason_seg/RSReasonSeg/{split_name}/labels")
         path2_qas = os.path.join(base_data_path, f"rs_reason_seg/RSReasonSeg/{split_name}/QAs")
 
+        # Flat structure fallback (e.g. train/images, train/labels, train/QAs)
+        path3_images = os.path.join(base_data_path, f"{split_name}/images")
+        path3_labels = os.path.join(base_data_path, f"{split_name}/labels")
+        path3_qas = os.path.join(base_data_path, f"{split_name}/QAs")
+
         if os.path.exists(path1_images):
             self.images_root = path1_images
             self.labels_root = path1_labels if os.path.exists(path1_labels) else path1_val_labels
             self.qas_root = path1_qas if os.path.exists(path1_qas) else path1_val_qas
+        elif os.path.exists(path3_images):
+            self.images_root = path3_images
+            self.labels_root = path3_labels
+            self.qas_root = path3_qas
         else:
             self.images_root = path2_images
             self.labels_root = path2_labels
