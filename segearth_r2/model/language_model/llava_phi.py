@@ -429,6 +429,13 @@ class SegEarthR2(MiphaPhiForCausalLM):
                     )
             
             else:
+                slice_to_embed = input_id[:chunk_len] #Fix to see if the negative tokens are getting passed
+                if (slice_to_embed < 0).any():
+                    try:
+                        with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
+                            f_dbg.write(f"[TRAPPED NEGATIVE] chunk_len: {chunk_len}, values: {slice_to_embed.tolist()}\n")
+                    except Exception:
+                        pass
                 cur_new_input_embeds.append(self.get_model().embed_tokens(input_id[:chunk_len]))
                 image_features_indices.append(torch.zeros(chunk_len))
                 
@@ -645,21 +652,15 @@ class SegEarthR2(MiphaPhiForCausalLM):
         # ==================== DEBUG TO FILE ====================
         try:
             with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
-                # 1. Print inputs min/max/shape
                 if input_ids is not None:
-                    f_dbg.write(f"input_ids shape: {input_ids.shape}, min: {input_ids.min().item()}, max: {input_ids.max().item()}\n")
+                    # Find all unique negative numbers in the input tensor
+                    neg_vals = input_ids[input_ids < 0].unique().tolist()
+                    f_dbg.write(f"input_ids shape: {input_ids.shape}, unique negative values: {neg_vals}, max: {input_ids.max().item()}\n")
                 if token_refer_id is not None:
                     for i, r in enumerate(token_refer_id):
                         if r is not None:
                             f_dbg.write(f"token_refer_id[{i}] shape: {r.shape}, min: {r.min().item()}, max: {r.max().item()}\n")
                 f_dbg.write(f"Model embed_tokens weight shape: {self.get_model().embed_tokens.weight.shape}\n")
-                
-                # 2. Inspect the exact source of PhiRotaryEmbedding on Kaggle
-                import inspect
-                from transformers.models.phi.modeling_phi import PhiRotaryEmbedding
-                f_dbg.write("=== PhiRotaryEmbedding Source ===\n")
-                f_dbg.write(inspect.getsource(PhiRotaryEmbedding))
-                f_dbg.write("=================================\n")
         except Exception as e:
             pass
         # ======================================================
