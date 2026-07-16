@@ -483,7 +483,9 @@ class SegEarthR2(MiphaPhiForCausalLM):
             
             if (cur_input_ids == IMAGE_TOKEN_INDEX).sum() == 0:
                 # multimodal LLM, but the current sample is not multimodal
-                cur_input_embeds = self.get_model().embed_tokens(cur_input_ids)
+                safe_input_ids = cur_input_ids.clamp(min=0) #To handle negative token index in multimodal setup
+                cur_input_embeds = self.get_model().embed_tokens(safe_input_ids)
+                # cur_input_embeds = self.get_model().embed_tokens(cur_input_ids)
                 # ensure gradients back propagation, not changing cur_input_embeds
                 cur_input_embeds = cur_input_embeds + (
                         0. * self.get_model().mm_projector(vision_tower.dummy_feature)).sum()
