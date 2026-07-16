@@ -68,6 +68,7 @@ class Arguments:
     dataloader_num_workers: int = 8
     dataset_type: str = field(default='LaSeRS')
     data_split: str = field(default='test')
+    skip_empty_target: bool = False
 
 class Summary(Enum):
     NONE = 0
