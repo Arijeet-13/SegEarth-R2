@@ -304,7 +304,7 @@ class LLaVATrainer(Trainer):
                         else:
                             loss_value = 0.0
                         if loss_value == 0 and hasattr(self,'history_loss_dict'):
-                            loss_value = self.history_loss_dict[name]
+                            loss_value = self.history_loss_dict.get(name, 0.0)
                         loss_dict[name] = loss_value
                 self.update_history_loss_dict(outputs)
                 # loss_mask = outputs["loss_mask"].item() if isinstance(outputs, dict) else 0
