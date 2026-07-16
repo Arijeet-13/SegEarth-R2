@@ -16,8 +16,6 @@
 
 import os
 import sys
-os.environ["CUDA_LAUNCH_BLOCKING"] = "1" #Fix to see the errors
-# ... rest of your imports (torch, transformers, etc.)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
@@ -214,7 +212,8 @@ def train():
     compute_dtype = (torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32)) # torch.float16
 
     mask_cfg = get_mask_config(config=model_args.mask_config)
-    bnb_model_from_pretrained_args = {"low_cpu_mem_usage": True}
+    # bnb_model_from_pretrained_args = {"low_cpu_mem_usage": True}
+    bnb_model_from_pretrained_args = {}
     model = SegEarthR2.from_pretrained(
         model_args.model_name_or_path,
         mask_decoder_cfg=mask_cfg,

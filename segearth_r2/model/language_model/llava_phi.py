@@ -196,8 +196,8 @@ class SegEarthR2(MiphaPhiForCausalLM):
     # def mask_token_processor()
 
     def get_vision_tower_feature(self, images): #Completely frozen vision tower
-        with torch.no_grad():
-            features = self.get_model().get_vision_tower_mask()(images)
+        # with torch.no_grad():
+        features = self.get_model().get_vision_tower_mask()(images)
         features_dict = {
             'res2': features[0],
             'res3': features[1],
@@ -429,13 +429,13 @@ class SegEarthR2(MiphaPhiForCausalLM):
                     )
             
             else:
-                slice_to_embed = input_id[:chunk_len] #Fix to see if the negative tokens are getting passed
-                if (slice_to_embed < 0).any():
-                    try:
-                        with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
-                            f_dbg.write(f"[TRAPPED NEGATIVE] chunk_len: {chunk_len}, values: {slice_to_embed.tolist()}\n")
-                    except Exception:
-                        pass
+                # slice_to_embed = input_id[:chunk_len] #Fix to see if the negative tokens are getting passed
+                # if (slice_to_embed < 0).any():
+                #     try:
+                #         with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
+                #             f_dbg.write(f"[TRAPPED NEGATIVE] chunk_len: {chunk_len}, values: {slice_to_embed.tolist()}\n")
+                #     except Exception:
+                #         pass
                 cur_new_input_embeds.append(self.get_model().embed_tokens(input_id[:chunk_len].clamp(min=0)))
                 image_features_indices.append(torch.zeros(chunk_len))
                 
@@ -649,42 +649,6 @@ class SegEarthR2(MiphaPhiForCausalLM):
             global_step=None,
             mask_num=None,
             dataset_type=None,) -> Union[Tuple, CausalLMOutputWithPast]:
-
-        # ==================== DEBUG TO FILE ====================
-        try:
-            with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
-                if input_ids is not None:
-                    # Find all unique negative numbers in the input tensor
-                    neg_vals = input_ids[input_ids < 0].unique().tolist()
-                    f_dbg.write(f"input_ids shape: {input_ids.shape}, unique negative values: {neg_vals}, max: {input_ids.max().item()}\n")
-                if token_refer_id is not None:
-                    for i, r in enumerate(token_refer_id):
-                        if r is not None:
-                            f_dbg.write(f"token_refer_id[{i}] shape: {r.shape}, min: {r.min().item()}, max: {r.max().item()}\n")
-                f_dbg.write(f"Model embed_tokens weight shape: {self.get_model().embed_tokens.weight.shape}\n")
-        except Exception as e:
-            pass
-        # ======================================================
-    
-    # def forward(
-    #         self,
-    #         input_ids: torch.LongTensor = None,
-    #         attention_mask: Optional[torch.Tensor] = None,
-    #         past_key_values: Optional[List[torch.FloatTensor]] = None,
-    #         inputs_embeds: Optional[torch.FloatTensor] = None,
-    #         labels: Optional[torch.LongTensor] = None,
-    #         use_cache: Optional[bool] = None,
-    #         output_attentions: Optional[bool] = None,
-    #         output_hidden_states: Optional[bool] = None,
-    #         images: Optional[torch.FloatTensor] = None,
-    #         images_clip: Optional[torch.FloatTensor] = None,
-    #         return_dict: Optional[bool] = None,
-    #         seg_info=None,
-    #         token_refer_id=None,
-    #         SEG_token_embedding_indices=None,
-    #         global_step=None,
-    #         mask_num=None,
-    #         dataset_type=None,) -> Union[Tuple, CausalLMOutputWithPast]:
         
         if dataset_type is not None:
             assert all(item == dataset_type[0] for item in dataset_type), f'this batch contain different dataset_type: {dataset_type}'
@@ -714,27 +678,14 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 input_ids, attention_mask, past_key_values, inputs_embeds, labels, SEG_token_embedding_indices, image_features_indices = self.prepare_inputs_labels_for_multimodal(
                     input_ids, attention_mask, past_key_values, labels, images_clip,
                     token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
-                torch.cuda.synchronize()
+                # torch.cuda.synchronize()
         else:
             image_features = None
             input_ids, attention_mask, past_key_values, inputs_embeds, labels, SEG_token_embedding_indices, image_features_indices = self.prepare_inputs_labels_for_multimodal(
                 input_ids, attention_mask, past_key_values, labels, images_clip,
                 token_refer_id=token_refer_id, SEG_token_embedding_indices=SEG_token_embedding_indices)
-            torch.cuda.synchronize() #Checkpoint B
+            # torch.cuda.synchronize() #Checkpoint B
 
-         # ==================== DEBUG TO FILE ====================
-        try:
-            with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
-                f_dbg.write(f"=== BEFORE self.model ===\n")
-                f_dbg.write(f"input_ids is None: {input_ids is None}\n")
-                if input_ids is not None:
-                    f_dbg.write(f"input_ids shape: {input_ids.shape}, min: {input_ids.min().item()}, max: {input_ids.max().item()}\n")
-                f_dbg.write(f"inputs_embeds is None: {inputs_embeds is None}\n")
-                if inputs_embeds is not None:
-                    f_dbg.write(f"inputs_embeds shape: {inputs_embeds.shape}\n")
-                f_dbg.write(f"===========================\n")
-        except Exception:
-            pass
 
         outputs = self.model(
             input_ids=input_ids,
@@ -746,7 +697,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        torch.cuda.synchronize() #Checkpoint C
+        # torch.cuda.synchronize() #Checkpoint C
         
         hidden_states = outputs.last_hidden_state
         logits = self.lm_head(hidden_states)

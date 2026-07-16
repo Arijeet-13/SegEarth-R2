@@ -328,6 +328,7 @@ class EarthReasonDataset(RS_Base_Dataset):
         self.base_data_path = base_data_path
         self.tokenizer = tokenizer
         self.data_args = data_args
+        self.split = split
         
         # Determine the split name: 'train', 'val', or 'test'
         split_name = 'train'
@@ -394,9 +395,12 @@ class EarthReasonDataset(RS_Base_Dataset):
         ref = QAs["questions"][0]
         answer_num = len(QAs["answer"])
         if answer_num == 0:
-            # Skip no-target samples to avoid distributed training deadlock
-            # (both GPUs must run the same modules each step)
-            return self.__getitem__((idx + 1) % len(self))
+            if 'train' in self.split.lower():
+                # Skip no-target samples to avoid distributed training deadlock
+                # (both GPUs must run the same modules each step)
+                return self.__getitem__((idx + 1) % len(self))
+            else:
+                answer = "There is no target object in the image."
         else:
             answer = f"Sure, it is [SEG]. \n{QAs['answer'][0]}"
             
@@ -422,7 +426,7 @@ class EarthReasonDataset(RS_Base_Dataset):
         # process image
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image_RGB = preprocess_image(image, 800) #Reduced from 1024
+        image_RGB = preprocess_image(image, 1024) #Reduced from 1024
         image_tensor = torch.as_tensor(np.ascontiguousarray(image_RGB))
         data_dict['image'] = (image_tensor.float() - self.pixel_mean) / self.pixel_std
         
@@ -569,6 +573,7 @@ class DataCollatorForCOCODatasetV2(object):
                 SEG_token_embedding_indices,
                 batch_first=True,
                 padding_value=0)
+            SEG_token_embedding_indices = SEG_token_embedding_indices[:, :self.tokenizer.model_max_length-728]
             batch['SEG_token_embedding_indices'] = SEG_token_embedding_indices
         
         if 'mask_num' in instances[0]:
