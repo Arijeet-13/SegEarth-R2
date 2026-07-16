@@ -420,7 +420,7 @@ class EarthReasonDataset(RS_Base_Dataset):
         # process image
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image_RGB = preprocess_image(image, 1024)
+        image_RGB = preprocess_image(image, 800) #Reduced from 1024
         image_tensor = torch.as_tensor(np.ascontiguousarray(image_RGB))
         data_dict['image'] = (image_tensor.float() - self.pixel_mean) / self.pixel_std
         

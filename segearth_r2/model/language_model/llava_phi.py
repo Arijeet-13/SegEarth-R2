@@ -195,8 +195,9 @@ class SegEarthR2(MiphaPhiForCausalLM):
 
     # def mask_token_processor()
 
-    def get_vision_tower_feature(self, images):
-        features = self.get_model().get_vision_tower_mask()(images)
+    def get_vision_tower_feature(self, images): #Completely frozen vision tower
+        with torch.no_grad():
+            features = self.get_model().get_vision_tower_mask()(images)
         features_dict = {
             'res2': features[0],
             'res3': features[1],
@@ -640,41 +641,6 @@ class SegEarthR2(MiphaPhiForCausalLM):
             global_step=None,
             mask_num=None,
             dataset_type=None,) -> Union[Tuple, CausalLMOutputWithPast]:
-
-        # ==================== DEBUG TO FILE ====================
-        try:
-            with open("/kaggle/working/debug_log.txt", "a") as f_dbg:
-                if input_ids is not None:
-                    f_dbg.write(f"input_ids shape: {input_ids.shape}, min: {input_ids.min().item()}, max: {input_ids.max().item()}\n")
-                if token_refer_id is not None:
-                    for i, r in enumerate(token_refer_id):
-                        if r is not None:
-                            f_dbg.write(f"token_refer_id[{i}] shape: {r.shape}, min: {r.min().item()}, max: {r.max().item()}\n")
-                f_dbg.write(f"Model embed_tokens weight shape: {self.get_model().embed_tokens.weight.shape}\n")
-        except Exception as e:
-            pass
-        # ======================================================
-        # ======================================================
-    
-    # def forward(
-    #         self,
-    #         input_ids: torch.LongTensor = None,
-    #         attention_mask: Optional[torch.Tensor] = None,
-    #         past_key_values: Optional[List[torch.FloatTensor]] = None,
-    #         inputs_embeds: Optional[torch.FloatTensor] = None,
-    #         labels: Optional[torch.LongTensor] = None,
-    #         use_cache: Optional[bool] = None,
-    #         output_attentions: Optional[bool] = None,
-    #         output_hidden_states: Optional[bool] = None,
-    #         images: Optional[torch.FloatTensor] = None,
-    #         images_clip: Optional[torch.FloatTensor] = None,
-    #         return_dict: Optional[bool] = None,
-    #         seg_info=None,
-    #         token_refer_id=None,
-    #         SEG_token_embedding_indices=None,
-    #         global_step=None,
-    #         mask_num=None,
-    #         dataset_type=None,) -> Union[Tuple, CausalLMOutputWithPast]:
         
         if dataset_type is not None:
             assert all(item == dataset_type[0] for item in dataset_type), f'this batch contain different dataset_type: {dataset_type}'
