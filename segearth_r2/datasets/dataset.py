@@ -485,11 +485,11 @@ class DataCollatorForCOCODatasetV2(object):
             total_input_ids = [k2 for k1 in input_ids for k2 in k1]
             total_input_ids = torch.nn.utils.rnn.pad_sequence(total_input_ids,
                     batch_first=True, padding_value=self.tokenizer.pad_token_id)
-            total_input_ids = total_input_ids[:, :self.tokenizer.model_max_length]
+            total_input_ids = total_input_ids[:, :self.tokenizer.model_max_length-728] #Added the change to remove the issue of token length based CUDA errorSS
             total_labels = [k2 for k1 in labels for k2 in k1]
             total_labels = torch.nn.utils.rnn.pad_sequence(total_labels,
                     batch_first=True, padding_value=self.tokenizer.pad_token_id)
-            total_labels = total_labels[:, :self.tokenizer.model_max_length]
+            total_labels = total_labels[:, :self.tokenizer.model_max_length-728]
             input_ids_batch = []
             labels_batch = []
             for bs in range(BS):
@@ -506,8 +506,8 @@ class DataCollatorForCOCODatasetV2(object):
             labels = torch.nn.utils.rnn.pad_sequence(labels,
                                                     batch_first=True,
                                                     padding_value=IGNORE_INDEX)
-            input_ids = input_ids[:, :self.tokenizer.model_max_length]
-            labels = labels[:, :self.tokenizer.model_max_length]
+            input_ids = input_ids[:, :self.tokenizer.model_max_length-728]
+            labels = labels[:, :self.tokenizer.model_max_length-728]
         batch = dict(
             input_ids=input_ids,
             labels=labels,
