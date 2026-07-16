@@ -50,14 +50,15 @@ class AttentionLoss(nn.Module):
         
     def forward(self, model_attention_logits: torch.Tensor, gt_mask: torch.Tensor) -> torch.Tensor:
         device = model_attention_logits.device
+
+        gt_mask = gt_mask.to(device=device, dtype=torch.bool) #Added to make sure the mask is in GPU to avoid errors
         
-        # Initialize loss
-        loss = torch.tensor(0.0, device=device)  # Make sure the tensor is on the correct device
+        loss = torch.tensor(0.0, device=device)
         epsilon = 1e-8  # To avoid log(0)
         for idx in range(model_attention_logits.shape[0]):
             # Extract the attention map values based on the mask
-            attention_map_target = model_attention_logits[idx][gt_mask[idx] == 1]
-            attention_map_else = model_attention_logits[idx][gt_mask[idx] == 0]
+            attention_map_target = model_attention_logits[idx][gt_mask[idx]] #Changed from gt_mask[idx] == 1
+            attention_map_else = model_attention_logits[idx][~gt_mask[idx]] #Changed from gt_mask[idx] == 0
             if attention_map_target.numel() == 0:
                 continue
             mean = torch.mean(attention_map_else) if attention_map_else.numel() > 0 else torch.tensor(0.0, device=device)
