@@ -743,19 +743,38 @@ class SegEarthR2(MiphaPhiForCausalLM):
             loss = None
 
             llm_loss = None
-            if labels is not None:
-                # if seg_query_mask is None or batch_dataset_type in seg_llm_loss_dataset:
+            if labels is not None: #Ignore the refer token and other negative tokens during loss calculations
                 # Shift so that tokens < n predict n
                 shift_logits = logits[..., :-1, :].contiguous()
                 shift_labels = labels[..., 1:].contiguous()
+                
                 # Flatten the tokens
                 loss_fct = CrossEntropyLoss()
                 vocab_size = shift_logits.shape[-1]
+                
+                invalid_mask = (shift_labels < 0) & (shift_labels != IGNORE_INDEX)
+                invalid_mask |= (shift_labels >= vocab_size)
+                shift_labels[invalid_mask] = IGNORE_INDEX
+                # =======================================================
+                
                 shift_logits = shift_logits.view(-1, vocab_size)  # self.config.vocab_size
                 shift_labels = shift_labels.view(-1)
                 # Enable model/pipeline parallelism
                 shift_labels = shift_labels.to(shift_logits.device)
                 llm_loss = loss_fct(shift_logits, shift_labels)
+            # if labels is not None:
+            #     # if seg_query_mask is None or batch_dataset_type in seg_llm_loss_dataset:
+            #     # Shift so that tokens < n predict n
+            #     shift_logits = logits[..., :-1, :].contiguous()
+            #     shift_labels = labels[..., 1:].contiguous()
+            #     # Flatten the tokens
+            #     loss_fct = CrossEntropyLoss()
+            #     vocab_size = shift_logits.shape[-1]
+            #     shift_logits = shift_logits.view(-1, vocab_size)  # self.config.vocab_size
+            #     shift_labels = shift_labels.view(-1)
+            #     # Enable model/pipeline parallelism
+            #     shift_labels = shift_labels.to(shift_logits.device)
+            #     llm_loss = loss_fct(shift_logits, shift_labels)
                 
             mask_loss = None
             if seg_info is not None:
