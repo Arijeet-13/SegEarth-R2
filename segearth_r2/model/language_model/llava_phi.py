@@ -778,7 +778,11 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 batch_attentions = torch.cat(batch_attentions_list, dim=0) # [4, 729]
                 loss_attention += self.attention_loss(batch_attentions, masks_down)
                                 
-            loss = llm_loss + mask_loss + 0.01 * loss_attention
+            # loss = llm_loss + mask_loss + 0.01 * loss_attention
+            if seg_info is not None: #To prevent error during vqa or text only
+                loss = llm_loss + mask_loss + 0.01 * loss_attention
+            else:
+                loss = llm_loss
             
             # loss = llm_loss + mask_loss
 

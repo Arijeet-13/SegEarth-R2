@@ -298,7 +298,11 @@ class LLaVATrainer(Trainer):
                 loss_dict = {}
                 for name,value in outputs.items():
                     if 'loss' in name and name != 'loss':
-                        loss_value = value.item()
+                        # loss_value = value.item()
+                        if value is not None:
+                            loss_value = value.item()
+                        else:
+                            loss_value = 0.0
                         if loss_value == 0 and hasattr(self,'history_loss_dict'):
                             loss_value = self.history_loss_dict[name]
                         loss_dict[name] = loss_value

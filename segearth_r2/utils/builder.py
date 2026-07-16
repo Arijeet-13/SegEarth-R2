@@ -48,7 +48,8 @@ def load_pretrained_model(model_path, model_base, model_name, model_args, mask_c
     vision_tower.to(device=device)
     image_processor = vision_tower.image_processor
 
-    model.resize_token_embeddings(len(tokenizer))
+    # model.resize_token_embeddings(len(tokenizer))
+    model.resize_token_embeddings(max(len(tokenizer), model.config.vocab_size)) #Changed due to bug fixes.
 
     if hasattr(model.config, "max_sequence_length"):
         context_len = model.config.max_sequence_length
