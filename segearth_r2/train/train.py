@@ -268,6 +268,13 @@ def train():
         vision_tower_mask = model.model.get_vision_tower_mask()
         vision_tower.to(dtype=torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32), device=training_args.device)
         vision_tower_mask.to(dtype=torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32), device=training_args.device)
+
+        model.to(dtype=torch.bfloat16 if training_args.bf16 else (torch.float16 if training_args.fp16 else torch.float32)) #Type casting to fp32
+        if hasattr(model, 'predictor') and hasattr(model.predictor, 'criterion'):
+            model.predictor.criterion.float()
+        if hasattr(model, 'pixel_decoder'):
+            model.pixel_decoder.float()
+
         data_args.is_multimodal = True
 
 
