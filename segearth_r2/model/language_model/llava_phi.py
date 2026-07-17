@@ -702,7 +702,10 @@ class SegEarthR2(MiphaPhiForCausalLM):
         hidden_states = outputs.last_hidden_state
         logits = self.lm_head(hidden_states)
         if SEG_token_embedding_indices is not None:
-            attentions = [attention_item.sum(dim=1) for attention_item in outputs.attentions]
+            if outputs.attentions is not None:
+                attentions = [attention_item.sum(dim=1) for attention_item in outputs.attentions if attention_item is not None]
+            else:
+                attentions = []
             SEG_embedding = self.SEG_token_projector(self.get_SEG_embedding(hidden_states, SEG_token_embedding_indices))
 
         if image_features is not None:     
