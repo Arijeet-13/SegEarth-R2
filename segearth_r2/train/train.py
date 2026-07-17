@@ -21,6 +21,7 @@ project_root = os.path.dirname(os.path.dirname(current_dir))
 sys.path.insert(0, project_root)
 
 from transformers import SiglipImageProcessor
+from peft import LoraConfig, get_peft_model
 import copy
 import warnings
 
@@ -138,6 +139,25 @@ def get_mm_adapter_state_maybe_zero_3(named_params, keys_to_match):
     to_return = {k: maybe_zero_3(v, ignore_status=True).cpu() for k, v in to_return.items()}
     return to_return
 
+def find_linear_layers(model, lora_target_modules=['q_proj', 'v_proj'], train_module_list=[]): 
+    cur_train_module_list = copy.deepcopy(train_module_list)
+    cur_train_module_list.extend(["vision_tower", "vision_tower_mask"])
+    cls = torch.nn.Linear
+    lora_module_names = set()
+    for name, module in model.named_modules():
+        if (isinstance(module, cls)
+            and all(
+                        [
+                            x not in name
+                            for x in cur_train_module_list
+                        ]
+                    )
+                    and any([x in name for x in lora_target_modules])):
+            # names = name.split('.')
+            # lora_module_names.add(names[0] if len(names) == 1 else names[-1])
+            lora_module_names.add(name)
+
+    return sorted(list(lora_module_names))
 
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
                                    output_dir: str):
@@ -301,6 +321,31 @@ def train():
     ]
     if model_args.train_swin_backbone:
         train_module_list.append('vision_tower_mask')
+
+    if training_args.lora_enable:
+        lora_r = training_args.lora_r
+        lora_alpha = training_args.lora_alpha
+        lora_dropout = training_args.lora_dropout
+        lora_target_modules = find_linear_layers(model, train_module_list=train_module_list)
+        lora_config = LoraConfig(
+            r=lora_r,
+            lora_alpha=lora_alpha,
+            target_modules=lora_target_modules,
+            lora_dropout=lora_dropout,
+            bias="none",
+            task_type="CAUSAL_LM",
+        )
+        model = get_peft_model(model, lora_config)
+        model.print_trainable_parameters()
+
+        for n, p in model.named_parameters():
+            if any(
+                [
+                    x in n
+                    for x in train_module_list
+                ]):
+
+                p.requires_grad = True
 
     model.get_special_token(SEG=tokenizer("[SEG]", return_tensors='pt', add_special_tokens=False)['input_ids'], EOS=tokenizer.eos_token_id)
 
