@@ -27,6 +27,9 @@ def parse_args(args):
     parser.add_argument(
         "--model_path", default="./save_model/SegEarth-R2"
     )
+    parser.add_argument(
+        "--model_name_or_path", default="", type=str
+    )
 
     parser.add_argument(
         "--vision_tower", default="./pretrained_model/siglip-so400m-patch14-384"
@@ -90,8 +93,9 @@ def load_pretrained_model(model_path, model_args, mask_config='/mask_config/mask
     mask_cfg = get_mask_config(mask_config)
     mask_cfg.MODEL.MASK_FORMER.SEG_TASK = model_args.seg_task if hasattr(model_args, 'seg_task') else 'instance'
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
-    model = SegEarthR2.from_pretrained(model_path, mask_decoder_cfg=mask_cfg, **kwargs)
+    base_model_path = model_args.model_name_or_path if hasattr(model_args, 'model_name_or_path') and model_args.model_name_or_path else model_path
+    tokenizer = AutoTokenizer.from_pretrained(base_model_path, use_fast=True)
+    model = SegEarthR2.from_pretrained(base_model_path, mask_decoder_cfg=mask_cfg, **kwargs)
 
     model.use_temporal_query = model_args.use_temporal_query if hasattr(model_args, 'use_temporal_query') else False
     model.use_vmtf = model_args.use_vmtf if hasattr(model_args, 'use_vmtf') else False
@@ -125,7 +129,9 @@ def load_pretrained_model(model_path, model_args, mask_config='/mask_config/mask
         )
         model = get_peft_model(model, lora_config)
 
-    model.resize_token_embeddings(len(tokenizer))
+    if tokenizer.pad_token is None:
+        tokenizer.add_special_tokens(dict(pad_token="[PAD]"))
+    model.resize_token_embeddings(max(len(tokenizer), model.config.vocab_size))
 
     from deepspeed.utils.zero_to_fp32 import load_state_dict_from_zero_checkpoint
     model = load_state_dict_from_zero_checkpoint(model, model_path)
