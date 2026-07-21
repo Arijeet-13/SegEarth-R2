@@ -64,7 +64,10 @@ def preprocess_mask(mask, image_size):
     
     return processed_masks
 
-def preprocess_image(image, image_size, pad_value=0):
+def preprocess_image(image, image_size=1024, pad_value=0):
+    if isinstance(image, str):
+        image = cv2.imread(image)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
     h, w = image.shape[:2]
     
@@ -279,6 +282,7 @@ class LaSeRSDataset(RS_Base_Dataset):
                 'height': image_height,
                 'width': image_width,
                 'image_id': os.path.basename(image_path).split(".")[0],
+                'instruction': ref,
             })
             
         prefix_inst = 'This is an image \n<image>\n, please doing Reasoning Segmentation according to the following instruction:'
@@ -452,6 +456,7 @@ class EarthReasonDataset(RS_Base_Dataset):
                 'height': image_height,
                 'width': image_width,
                 'image_id': data_id,
+                'instruction': ref,
             })
             
         prefix_inst = 'This is an image \n<image>\n, please doing Reasoning Segmentation according to the following instruction:'
