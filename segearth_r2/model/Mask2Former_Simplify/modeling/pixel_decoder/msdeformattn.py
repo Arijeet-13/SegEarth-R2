@@ -10,6 +10,7 @@
 @Desc    :   修改自Mask2former,移除detectron2依赖
 '''
 
+from mamba_ssm import Mamba #Added Mamba
 # here put the import lib
 
 import numpy as np
@@ -22,6 +23,25 @@ from torch.nn import functional as F
 from ..transformer_decoder.position_encoding import PositionEmbeddingSine
 from ..transformer_decoder.transformer import _get_clones, _get_activation_fn
 from .ops.modules import MSDeformAttn
+
+class MambaFPNRefiner(nn.Module): #Added MambaFPN Refiner
+    def __init__(self, channels, d_state=16, d_conv=4, expand=2):
+        super().__init__()
+        self.norm = nn.LayerNorm(channels)
+        self.mamba_fwd = Mamba(d_model=channels, d_state=d_state, d_conv=d_conv, expand=expand)
+        self.mamba_bwd = Mamba(d_model=channels, d_state=d_state, d_conv=d_conv, expand=expand)
+        self.out_proj = nn.Conv2d(channels * 2, channels, kernel_size=1)
+        nn.init.zeros_(self.out_proj.weight)
+        nn.init.zeros_(self.out_proj.bias)   # near-identity at init
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+        seq = x.flatten(2).transpose(1, 2)
+        seq_n = self.norm(seq)
+        fwd = self.mamba_fwd(seq_n)
+        bwd = self.mamba_bwd(seq_n.flip(dims=[1])).flip(dims=[1])
+        merged = torch.cat([fwd, bwd], dim=-1).transpose(1, 2).reshape(B, 2 * C, H, W)
+        return x + self.out_proj(merged)
 
 # MSDeformAttn Transformer encoder in deformable detr
 class MSDeformAttnTransformerEncoderLayer(nn.Module):
@@ -265,6 +285,8 @@ class MSDeformAttnPixelDecoder(nn.Module):
         self.lateral_convs = lateral_convs[::-1]
         self.output_convs = output_convs[::-1]
 
+        self.mamba_fpn_refiner = MambaFPNRefiner(channels=conv_dim) #Added MambaFPNRefiner
+
     def forward_features(self, features):
         srcs = []
         pos = []
@@ -305,6 +327,7 @@ class MSDeformAttnPixelDecoder(nn.Module):
             # Following FPN implementation, we use nearest upsampling here
             y = cur_fpn + F.interpolate(out[-1].float(), size=cur_fpn.shape[-2:], mode="bilinear", align_corners=False).to(x.dtype)
             y = output_conv(y)
+            y = self.mamba_fpn_refiner(y) #Added MambaFPNRefiner
             out.append(y)
 
         for o in out:
