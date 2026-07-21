@@ -18,7 +18,7 @@ from segearth_r2.model import *
 from segearth_r2.datasets.dataset import get_mask_config
 from segearth_r2.model.language_model.llava_phi import SegEarthR2
 
-def load_pretrained_model(model_path, model_base, model_name, model_args, mask_config='/mask_config/maskformer2_swin_base_384_bs16_50ep.yaml', load_8bit=False, load_4bit=False, device_map="auto", device="cuda"):
+def load_pretrained_model(model_path, model_base=None, model_name=None, model_args=None, mask_config='/mask_config/maskformer2_swin_base_384_bs16_50ep.yaml', load_8bit=False, load_4bit=False, device_map="auto", device="cuda"):
     kwargs = {"device_map": 'cpu'}
 
     if load_8bit:
@@ -39,10 +39,11 @@ def load_pretrained_model(model_path, model_base, model_name, model_args, mask_c
     model_map_name = model_args.model_map_name
     mask_cfg = get_mask_config(mask_config)
     mask_cfg.MODEL.MASK_FORMER.SEG_TASK = model_args.seg_task if hasattr(model_args, 'seg_task') else 'instance'
+    use_seg_query = model_args.use_seg_query if hasattr(model_args, 'use_seg_query') else True
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
     print(f'current model is {model_map_name}')
-    model = SegEarthR2.from_pretrained(model_path, mask_decoder_cfg=mask_cfg, use_seg_query = use_seg_query, **kwargs)
+    model = SegEarthR2.from_pretrained(model_path, mask_decoder_cfg=mask_cfg, **kwargs)
 
     vision_tower = model.get_model().get_vision_tower_mask()
     vision_tower.to(device=device)
