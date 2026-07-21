@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from transformers import SiglipImageProcessor
 import torch.distributed as distributed
 import zipfile
+from enum import Enum
 
 from segearth_r2.utils import conversation as conversation_lib
 from segearth_r2.utils.builder import load_pretrained_model
@@ -208,8 +209,10 @@ def preprocess_input(text: str, image_path: str, tokenizer, clip_image_processor
     pixel_mean = torch.Tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
     pixel_std = torch.Tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
     
-    image_RGB = preprocess_image(image_path)
-    image_tensor = torch.as_tensor(np.ascontiguousarray(image_RGB.transpose(2, 0, 1)))
+    image_RGB = preprocess_image(image_path, 1024)
+    image_tensor = torch.as_tensor(np.ascontiguousarray(image_RGB)).float()
+    if image_tensor.shape[0] != 3:
+        image_tensor = image_tensor.permute(2, 0, 1)
     images = (image_tensor - pixel_mean) / pixel_std
 
     # Text and CLIP image preprocessing
@@ -327,14 +330,14 @@ def do_eval(model, tokenizer, clip_image_processor, eval_dataloader, split, data
         for idx, inputs in tqdm(enumerate(eval_dataloader), total=len(eval_dataloader)):
             mask_num = inputs['mask_num'][0]
  
-            if mask_num == 0:
-                if data_args.skip_empty_target:
+            if mask_num == 0 or len(inputs['seg_info']) == 0:
+                if data_args.skip_empty_target or len(inputs['seg_info']) == 0:
                     n_skipped_empty += 1
                     continue
  
             overall_mask_num += mask_num
  
-            text = inputs['seg_info'][0]['instruction']
+            text = inputs['seg_info'][0].get('instruction', None) if 'instruction' in inputs['seg_info'][0] else inputs.get('ref', [None])[0]
             image_path = inputs['seg_info'][0]['image_path']
  
             input_ids, images, images_clip = preprocess_input(text, image_path, tokenizer, clip_image_processor)
