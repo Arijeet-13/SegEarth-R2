@@ -11,7 +11,7 @@ from detectron2.structures import Boxes, ImageList, Instances, BitMasks
 from transformers.modeling_outputs import CausalLMOutputWithPast, BaseModelOutputWithPast
 from detectron2.modeling.postprocessing import sem_seg_postprocess
 from detectron2.utils.memory import retry_if_cuda_oom
-from mamba_ssm import Mamba #Using Mamba
+# from mamba_ssm import Mamba #Using Mamba
 from ..mipha.model.language_model.mipha_phi import (MiphaPhiForCausalLM, MiphaPhiModel)
 
 from segearth_r2.utils.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, REFER_TOKEN_INDEX
@@ -42,25 +42,47 @@ class CausalOutputWithMask(CausalLMOutputWithPast):
     loss_dice: Optional[torch.FloatTensor] = None
     loss_llm: Optional[torch.FloatTensor] = None
     loss_attention: Optional[torch.FloatTensor] = None
+    loss_channel: Optional[torch.FloatTensor] = None #Added Channel Loss
 
-class MambaSpatialRefiner(nn.Module): #MambaSpatialRefiner
-    def __init__(self, channels, d_state=16, d_conv=4, expand=2):
+class ChannelDiscriminabilityLoss(nn.Module): #Channel Loss module
+    def __init__(self, mse_floor=1e-3):
         super().__init__()
-        self.norm = nn.LayerNorm(channels)
-        self.mamba_fwd = Mamba(d_model=channels, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.mamba_bwd = Mamba(d_model=channels, d_state=d_state, d_conv=d_conv, expand=expand)
-        self.out_proj = nn.Conv2d(channels * 2, channels, kernel_size=1)
-        nn.init.zeros_(self.out_proj.weight)
-        nn.init.zeros_(self.out_proj.bias)
+        self.mse_floor = mse_floor
 
-    def forward(self, x):
-        B, C, H, W = x.shape
-        seq = x.flatten(2).transpose(1, 2)
-        seq_n = self.norm(seq)
-        fwd = self.mamba_fwd(seq_n)
-        bwd = self.mamba_bwd(seq_n.flip(dims=[1])).flip(dims=[1])
-        merged = torch.cat([fwd, bwd], dim=-1).transpose(1, 2).reshape(B, 2 * C, H, W)
-        return x + self.out_proj(merged)           
+    def forward(self, feat, gt_mask):
+        gt_mask = gt_mask.to(device=feat.device, dtype=feat.dtype)
+        fg, bg = gt_mask, 1.0 - gt_mask
+
+        fg_area = fg.sum(dim=(2, 3))
+        bg_area = bg.sum(dim=(2, 3)).clamp(min=1.0)
+        valid = fg_area.squeeze(-1) > 0
+
+        bg_mean = ((feat * bg).sum(dim=(2, 3)) / bg_area).unsqueeze(-1).unsqueeze(-1)
+        disc = (((feat - bg_mean) ** 2) * fg).sum(dim=(2, 3)) / fg_area.clamp(min=1.0)
+        disc = disc.mean(dim=1).clamp(min=self.mse_floor)
+
+        loss = -torch.log(disc)
+        loss = torch.where(valid, loss, torch.zeros_like(loss))
+        return loss.sum() / valid.sum().clamp(min=1)
+
+# class MambaSpatialRefiner(nn.Module): #MambaSpatialRefiner
+#     def __init__(self, channels, d_state=16, d_conv=4, expand=2):
+#         super().__init__()
+#         self.norm = nn.LayerNorm(channels)
+#         self.mamba_fwd = Mamba(d_model=channels, d_state=d_state, d_conv=d_conv, expand=expand)
+#         self.mamba_bwd = Mamba(d_model=channels, d_state=d_state, d_conv=d_conv, expand=expand)
+#         self.out_proj = nn.Conv2d(channels * 2, channels, kernel_size=1)
+#         nn.init.zeros_(self.out_proj.weight)
+#         nn.init.zeros_(self.out_proj.bias)
+
+#     def forward(self, x):
+#         B, C, H, W = x.shape
+#         seq = x.flatten(2).transpose(1, 2)
+#         seq_n = self.norm(seq)
+#         fwd = self.mamba_fwd(seq_n)
+#         bwd = self.mamba_bwd(seq_n.flip(dims=[1])).flip(dims=[1])
+#         merged = torch.cat([fwd, bwd], dim=-1).transpose(1, 2).reshape(B, 2 * C, H, W)
+#         return x + self.out_proj(merged)           
 
 class AttentionLoss(nn.Module):
     def __init__(self, reduction='batchmean'):
@@ -163,10 +185,10 @@ class SegEarthR2(MiphaPhiForCausalLM):
             self.initial_mask_module()
         self.post_init()
 
-    def refine_with_mamba(self, mask_features, multi_scale_features): #Added Mamba
-        # mask_features = self.mamba_refiner(mask_features)
-        multi_scale_features = [self.mamba_refiner(feat) for feat in multi_scale_features]
-        return mask_features, multi_scale_features
+    # def refine_with_mamba(self, mask_features, multi_scale_features): #Added Mamba
+    #     # mask_features = self.mamba_refiner(mask_features)
+    #     multi_scale_features = [self.mamba_refiner(feat) for feat in multi_scale_features]
+    #     return mask_features, multi_scale_features
 
     def initial_mask_module(self, pretrained_path=None, model_args=None):
         if not self.is_train_mask_decode:
@@ -174,15 +196,16 @@ class SegEarthR2(MiphaPhiForCausalLM):
             self.config.mask_decode_train = True
 
         self.attention_loss = AttentionLoss()
+        self.channel_loss = ChannelDiscriminabilityLoss() #Added Channel Loss
         
         self.test_topk_per_image = self.mask_decoder_cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES
         input_shape = self.output_shape()
         self.pixel_decoder = self.pixel_decoder_init(cfg=self.mask_decoder_cfg, input_shape=input_shape)
         self.predictor = self.predictor_init(cfg=self.mask_decoder_cfg)
 
-        self.mamba_refiner = MambaSpatialRefiner(
-        channels=self.mask_decoder_cfg.MODEL.SEM_SEG_HEAD.CONVS_DIM  # 256
-        ) #Added Mamba
+        # self.mamba_refiner = MambaSpatialRefiner(
+        # channels=self.mask_decoder_cfg.MODEL.SEM_SEG_HEAD.CONVS_DIM  # 256
+        # ) #Added Mamba
 
         self.SEG_token_projector = nn.Linear(self.config.hidden_size, self.mask_decoder_cfg.MODEL.MASK_FORMER.HIDDEN_DIM)
             
@@ -741,7 +764,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
         if image_features is not None:     
             mask_features, transformer_encoder_features, multi_scale_features = self.pixel_decoder.forward_features(
                 image_features)
-            mask_features, multi_scale_features = self.refine_with_mamba(mask_features, multi_scale_features) #Added Mamba
+            # mask_features, multi_scale_features = self.refine_with_mamba(mask_features, multi_scale_features) #Added Mamba
             mask_num = torch.tensor(mask_num, device=mask_features.device)
             mask_features = torch.repeat_interleave(mask_features, repeats=mask_num, dim=0)
             multi_scale_features = [
@@ -791,6 +814,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
             loss_mask = torch.tensor(0.0, device=logits.device)
             loss_dice = torch.tensor(0.0, device=logits.device)
             loss_attention = torch.tensor(0.0, device=logits.device)
+            loss_channel = torch.tensor(0.0, device=logits.device) #Added Channel Loss
 
             if seg_info is not None and len(seg_info) > 0:
                 if 'padding_mask' in seg_info[0]:
@@ -839,6 +863,10 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 masks_down = F.interpolate(masks, size=(27, 27), mode="bilinear", align_corners=False)
                 masks_down = masks_down.view(masks_down.size(0), -1)
                 masks_down[masks_down > 0] = 1
+
+                masks_for_channel = F.interpolate(masks, size=mask_features.shape[-2:], mode="bilinear", align_corners=False) #Added channel Loss
+                masks_for_channel = (masks_for_channel > 0).float()
+                loss_channel = self.channel_loss(mask_features, masks_for_channel)
                 
                 loss_attention = torch.tensor(0.0, device=mask_loss.device)           
                 for full_attention_map in attentions:
@@ -853,7 +881,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
                     loss_attention += self.attention_loss(batch_attentions, masks_down)
 
             if mask_loss is not None:
-                loss = llm_loss + mask_loss + 0.01 * loss_attention
+                loss = llm_loss + mask_loss + 0.01 * loss_attention + 0.005 * loss_channel #Added Channel Loss
             else:
                 loss = llm_loss
 
@@ -867,6 +895,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 loss_dice=loss_dice.detach(),
                 loss_llm=llm_loss.detach(),
                 loss_attention=0.01 * loss_attention.detach(),
+                loss_channel=0.005 * loss_channel.detach(), #Added Channel Loss
             )
         
         else:
@@ -938,7 +967,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
         mask_features, transformer_encoder_features, multi_scale_features = self.pixel_decoder.forward_features(
             image_features)
     
-        mask_features, multi_scale_features = self.refine_with_mamba(mask_features, multi_scale_features) #Added Mamba
+        # mask_features, multi_scale_features = self.refine_with_mamba(mask_features, multi_scale_features) #Added Mamba
 
         images = [image.repeat((num, 1, 1, 1)) for image, num in zip(images, mask_num)]
         images = [s[0] for image_repeat in images for s in torch.split(image_repeat, 1, dim=0)]
@@ -1028,7 +1057,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
 
             mask_features, transformer_encoder_features, multi_scale_features = self.pixel_decoder.forward_features(
                 image_features)
-            mask_features, multi_scale_features = self.refine_with_mamba(mask_features, multi_scale_features) #Added Mamba
+            # mask_features, multi_scale_features = self.refine_with_mamba(mask_features, multi_scale_features) #Added Mamba
             
             mask_num = [SEG_embedding.shape[0]]
             images = [image.repeat((num, 1, 1, 1)) for image, num in zip(images, mask_num)]
