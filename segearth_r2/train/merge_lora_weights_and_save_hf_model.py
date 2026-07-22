@@ -47,6 +47,7 @@ def parse_args(args):
     parser.add_argument("--lora_dropout", default=0.05, type=float)
     parser.add_argument("--lora_weight_path", default="", type=str)
     parser.add_argument("--lora_bias", default="none", type=str)
+    parser.add_argument("--use_dora", action="store_true", default=False)
     parser.add_argument("--local-rank", default=0, type=int, help="node rank")
     
     parser.add_argument("--save_path", default="./InstructSeg_model", type=str, required=True)
