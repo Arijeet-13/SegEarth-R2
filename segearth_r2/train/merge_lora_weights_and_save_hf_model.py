@@ -126,6 +126,7 @@ def load_pretrained_model(model_path, model_args, mask_config='/mask_config/mask
             lora_dropout=lora_dropout,
             bias="none",
             task_type="CAUSAL_LM",
+            use_dora=model_args.use_dora, #Added Dora
         )
         model = get_peft_model(model, lora_config)
 

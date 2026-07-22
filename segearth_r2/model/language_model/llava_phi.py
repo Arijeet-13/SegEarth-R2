@@ -42,32 +42,32 @@ class CausalOutputWithMask(CausalLMOutputWithPast):
     loss_dice: Optional[torch.FloatTensor] = None
     loss_llm: Optional[torch.FloatTensor] = None
     loss_attention: Optional[torch.FloatTensor] = None
-    loss_channel: Optional[torch.FloatTensor] = None #Added Channel Loss
+    # loss_channel: Optional[torch.FloatTensor] = None #Added Channel Loss
     
-class ChannelDiscriminabilityLoss(nn.Module): #Added Channel Loss
-    def __init__(self, mse_floor=1e-2):
-        super().__init__()
-        self.mse_floor = mse_floor
+# class ChannelDiscriminabilityLoss(nn.Module): #Added Channel Loss
+#     def __init__(self, mse_floor=1e-2):
+#         super().__init__()
+#         self.mse_floor = mse_floor
 
-    def forward(self, feat, gt_mask):
-        feat = feat.float()
-        gt_mask = gt_mask.to(device=feat.device, dtype=feat.dtype)
-        fg, bg = gt_mask, 1.0 - gt_mask
+#     def forward(self, feat, gt_mask):
+#         feat = feat.float()
+#         gt_mask = gt_mask.to(device=feat.device, dtype=feat.dtype)
+#         fg, bg = gt_mask, 1.0 - gt_mask
 
-        fg_area = fg.sum(dim=(2, 3))
-        bg_area = bg.sum(dim=(2, 3)).clamp(min=1.0)
-        valid = fg_area.squeeze(-1) > 0     
+#         fg_area = fg.sum(dim=(2, 3))
+#         bg_area = bg.sum(dim=(2, 3)).clamp(min=1.0)
+#         valid = fg_area.squeeze(-1) > 0     
 
-        bg_mean = ((feat * bg).sum(dim=(2, 3)) / bg_area).unsqueeze(-1).unsqueeze(-1)
-        disc = (((feat - bg_mean) ** 2) * fg).sum(dim=(2, 3)) / fg_area.clamp(min=1.0)
-        disc = disc.mean(dim=1).clamp(min=self.mse_floor)
+#         bg_mean = ((feat * bg).sum(dim=(2, 3)) / bg_area).unsqueeze(-1).unsqueeze(-1)
+#         disc = (((feat - bg_mean) ** 2) * fg).sum(dim=(2, 3)) / fg_area.clamp(min=1.0)
+#         disc = disc.mean(dim=1).clamp(min=self.mse_floor)
 
-        loss = -torch.log(disc)
-        loss = torch.where(valid, loss, torch.zeros_like(loss))
-        n_valid = valid.sum().clamp(min=1)
-        final_loss = loss.sum() / n_valid
+#         loss = -torch.log(disc)
+#         loss = torch.where(valid, loss, torch.zeros_like(loss))
+#         n_valid = valid.sum().clamp(min=1)
+#         final_loss = loss.sum() / n_valid
 
-        return torch.nan_to_num(final_loss, nan=0.0, posinf=0.0, neginf=0.0)
+#         return torch.nan_to_num(final_loss, nan=0.0, posinf=0.0, neginf=0.0)
 
 # class MambaSpatialRefiner(nn.Module): #MambaSpatialRefiner
 #     def __init__(self, channels, d_state=16, d_conv=4, expand=2):
@@ -200,7 +200,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
             self.config.mask_decode_train = True
 
         self.attention_loss = AttentionLoss()
-        self.channel_loss = ChannelDiscriminabilityLoss() #Added Channel Loss
+        # self.channel_loss = ChannelDiscriminabilityLoss() #Added Channel Loss
         
         self.test_topk_per_image = self.mask_decoder_cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES
         input_shape = self.output_shape()
@@ -818,7 +818,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
             loss_mask = torch.tensor(0.0, device=logits.device)
             loss_dice = torch.tensor(0.0, device=logits.device)
             loss_attention = torch.tensor(0.0, device=logits.device)
-            loss_channel = torch.tensor(0.0, device=logits.device) #Added Channel Loss
+            # loss_channel = torch.tensor(0.0, device=logits.device) #Added Channel Loss
 
             if seg_info is not None and len(seg_info) > 0:
                 if 'padding_mask' in seg_info[0]:
@@ -868,9 +868,9 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 masks_down = masks_down.view(masks_down.size(0), -1)
                 masks_down[masks_down > 0] = 1
 
-                masks_for_channel = F.interpolate(masks, size=mask_features.shape[-2:], mode="bilinear", align_corners=False) #Added channel Loss
-                masks_for_channel = (masks_for_channel > 0).float()
-                loss_channel = self.channel_loss(mask_features, masks_for_channel)
+                # masks_for_channel = F.interpolate(masks, size=mask_features.shape[-2:], mode="bilinear", align_corners=False) #Added channel Loss
+                # masks_for_channel = (masks_for_channel > 0).float()
+                # loss_channel = self.channel_loss(mask_features, masks_for_channel)
                 
                 loss_attention = torch.tensor(0.0, device=mask_loss.device)           
                 for full_attention_map in attentions:
@@ -885,7 +885,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
                     loss_attention += self.attention_loss(batch_attentions, masks_down)
 
             if mask_loss is not None:
-                loss = llm_loss + mask_loss + 0.01 * loss_attention + 0.005 * loss_channel #Added Channel Loss
+                loss = llm_loss + mask_loss + 0.01 * loss_attention # + 0.005 * loss_channel #Added Channel Loss
             else:
                 loss = llm_loss
 
@@ -899,7 +899,7 @@ class SegEarthR2(MiphaPhiForCausalLM):
                 loss_dice=loss_dice.detach(),
                 loss_llm=llm_loss.detach(),
                 loss_attention=0.01 * loss_attention.detach(),
-                loss_channel=0.005 * loss_channel.detach(), #Added Channel Loss
+                # loss_channel=0.005 * loss_channel.detach(), #Added Channel Loss
             )
         
         else:

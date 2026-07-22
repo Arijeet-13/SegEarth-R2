@@ -116,6 +116,7 @@ class TrainingArguments(transformers.TrainingArguments):
     lora_dropout: float = 0.05
     lora_weight_path: str = ""
     lora_bias: str = "none"
+    use_dora: bool = False #Using Dora
     dataloader_drop_last: bool = True
     post_training: bool = False
 
@@ -334,6 +335,7 @@ def train():
             lora_dropout=lora_dropout,
             bias="none",
             task_type="CAUSAL_LM",
+            use_dora=training_args.use_dora, #Use Dora
         )
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
