@@ -43,19 +43,20 @@ class CausalOutputWithMask(CausalLMOutputWithPast):
     loss_llm: Optional[torch.FloatTensor] = None
     loss_attention: Optional[torch.FloatTensor] = None
     loss_channel: Optional[torch.FloatTensor] = None #Added Channel Loss
-
-class ChannelDiscriminabilityLoss(nn.Module): #Channel Loss module
-    def __init__(self, mse_floor=1e-3):
+    
+class ChannelDiscriminabilityLoss(nn.Module): #Added Channel Loss
+    def __init__(self, mse_floor=1e-2):
         super().__init__()
         self.mse_floor = mse_floor
 
     def forward(self, feat, gt_mask):
+        feat = feat.float()
         gt_mask = gt_mask.to(device=feat.device, dtype=feat.dtype)
         fg, bg = gt_mask, 1.0 - gt_mask
 
         fg_area = fg.sum(dim=(2, 3))
         bg_area = bg.sum(dim=(2, 3)).clamp(min=1.0)
-        valid = fg_area.squeeze(-1) > 0
+        valid = fg_area.squeeze(-1) > 0     
 
         bg_mean = ((feat * bg).sum(dim=(2, 3)) / bg_area).unsqueeze(-1).unsqueeze(-1)
         disc = (((feat - bg_mean) ** 2) * fg).sum(dim=(2, 3)) / fg_area.clamp(min=1.0)
@@ -63,7 +64,10 @@ class ChannelDiscriminabilityLoss(nn.Module): #Channel Loss module
 
         loss = -torch.log(disc)
         loss = torch.where(valid, loss, torch.zeros_like(loss))
-        return loss.sum() / valid.sum().clamp(min=1)
+        n_valid = valid.sum().clamp(min=1)
+        final_loss = loss.sum() / n_valid
+
+        return torch.nan_to_num(final_loss, nan=0.0, posinf=0.0, neginf=0.0)
 
 # class MambaSpatialRefiner(nn.Module): #MambaSpatialRefiner
 #     def __init__(self, channels, d_state=16, d_conv=4, expand=2):
